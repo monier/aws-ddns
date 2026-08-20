@@ -76,14 +76,15 @@ Recorded by developer decision at scaffold time (2026-08-20):
 - **No database**: the `db-*` targets are absent; `docs/database.md` records that no database
   exists.
 - **Narrowed heavy-client contract**: no CLI command surface, no multi-OS packaging matrix,
-  no OS-native log sink, no single-instance lock. The app is a container daemon with one
-  deployment target (`linux/amd64`); the container runtime owns instance lifecycle and log
-  collection (structured JSON on stdout).
-- **Documentation placement**: the **root `README.md` is the single comprehensive
-  document** (context, prerequisites, configuration, build, testing, deployment,
-  operations); `apps/aws-ddns/README.md` is intentionally minimal — a pointer plus the
-  code map and app-level targets. Detailed user/operator documentation belongs in the
-  root README, never duplicated in the app README.
+  no OS-native log sink, no single-instance lock. The app is a container daemon for Linux
+  targets (`amd64` + `arm64`, one multi-arch image); the container runtime owns instance
+  lifecycle and log collection (structured JSON on stdout).
+- **Documentation placement**: the **root `README.md` is the short, human-readable
+  guide** with exactly these sections — about (`aws-ddns`), how it works, how to use,
+  FAQ, author, contribute. **`apps/aws-ddns/README.md` is the complete technical
+  reference** (configuration, AWS setup, deployment modes, operations,
+  troubleshooting). Details go to the app README; the root stays short; no duplication
+  beyond the quick-start basics.
 
 ---
 
