@@ -1,27 +1,29 @@
 # aws-ddns — deployment on a local server (as a Docker Compose project).
 #
-# TEMPLATE: `make export-image` writes the ready-to-use copy to
-# dist/docker-compose.yaml with __VERSION__ replaced by the released version —
-# deploy that copy, not this file.
+# TEMPLATE: the image reference is rendered in by the root Makefile —
+#   make deploy        → dist/docker-compose.registry.yaml  (ghcr.io registry image)
+#   make export-image  → dist/docker-compose.yaml           (offline archive image)
+# Deploy a rendered copy, not this file.
 #
-# The rendered file is self-contained: no .env, no build context, no registry.
-# Before bringing it up, ONCE per version, load the image the file pins:
-#   docker load -i aws-ddns-<version>-linux-amd64.tar.gz     (x86_64 target)
-# The archive restores the image as localhost/aws-ddns:<version> — the exact
-# name referenced below; any other name would make Docker look on Docker Hub.
+# REGISTRY MODE (make deploy): the server pulls the image from the public
+# registry — nothing to copy; platform "update"/pull actions work. Pin the
+# version tag for reproducibility, or use :latest for button-driven upgrades.
+#
+# OFFLINE MODE (make export-image): self-contained, no registry. ONCE per
+# version, load the matching archive first: docker load -i <archive>. The
+# archive restores the image as localhost/aws-ddns:<version> — exactly the
+# rendered name; platform "update"/pull actions cannot work in this mode
+# (nothing to pull from — they fail harmlessly); upgrade by re-deploying this
+# project with the new rendered file.
 #
 # Put your filled-in aws-ddns.ini in the host data folder mounted below; the
 # app writes its last-ip.txt state file next to it. No user id is set anywhere —
 # the container engine manages the user (Docker's default unless your platform
 # overrides it), so the folder needs no ownership preparation.
-#
-# UPGRADES: load the new version's archive, then RE-DEPLOY this project with the
-# newly rendered file (only the image tag changes). Never use a platform's
-# "update"/pull action — there is no registry to pull from; it fails harmlessly.
 
 services:
   aws-ddns:
-    image: localhost/aws-ddns:__VERSION__
+    image: __IMAGE__
     container_name: aws-ddns
     restart: unless-stopped
     # Headless daemon: no inbound port is ever published; outbound HTTPS only.

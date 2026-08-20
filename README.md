@@ -4,9 +4,9 @@ A small Dynamic DNS service that keeps an AWS Route 53 `A` record synchronized w
 current public IPv4 address of the network where it runs — built for Docker-capable
 local servers behind a residential router with a dynamic public IP.
 
-**Author:** Monier R. · **License:** [MIT](LICENSE) · **Distribution:** this version
-targets a local, registry-less build — you build the image yourself and import it
-manually on the target (see Deployment).
+**Author:** Monier R. · **License:** [MIT](LICENSE) · **Distribution:** a public
+multi-arch image on GitHub Container Registry (`make deploy`), plus a fully offline,
+registry-less archive mode (`make export-image`) — see Deployment.
 
 This README is the single comprehensive document for the repository: context,
 prerequisites, configuration, build, testing, deployment, and operations.
@@ -154,7 +154,8 @@ All commands run from the repository root.
 | `start` / `update` | (Re)build and (re)create the daemon container via Compose |
 | `shutdown` | Stop the container |
 | `prune` / `teardown` | Remove project containers/images (+ volumes for `teardown`) |
-| `export-image` | Build + pack the deployment image per architecture and render the server Compose file, all into `dist/` (see Deployment) |
+| `deploy` | Build `amd64`+`arm64` and push one **multi-arch manifest** to the public registry (`ghcr.io`), tags `<VERSION>` and `latest`; renders `dist/docker-compose.registry.yaml` |
+| `export-image` | Offline mode: build + pack the image per architecture and render the server Compose file, all into `dist/` (see Deployment) |
 
 App-level extras (run in `apps/aws-ddns/`): `make image` (container image, native
 architecture) and `make image-amd64 VERSION=…` (`linux/amd64`, without packing).
@@ -193,11 +194,36 @@ and data folder (never credentials).
 
 ## Deployment
 
-**This version targets a local, registry-less build**: the image is built on your own
-machine and imported manually on the target — no container registry involved. It is
-suitable for local servers (any Docker-capable engine).
+Two distribution modes, both multi-architecture (`amd64` + `arm64`); suitable for local
+servers (any Docker-capable engine):
 
-### 1. Build, pack, export — no registry
+- **Registry mode (`make deploy`) — default for connected servers.** Publishes one
+  multi-arch manifest to the public GitHub Container Registry
+  (`ghcr.io/monier/aws-ddns`, tags `<VERSION>` and `latest`). The target pulls the
+  right architecture automatically, nothing is copied by hand, and platform
+  "update"/pull actions **work**. Publisher one-time setup: a token with the
+  `write:packages` scope (`gh auth refresh -h github.com -s write:packages`, then
+  `gh auth token | docker login ghcr.io --username <github-user> --password-stdin`);
+  after the first push, set the package public once in GitHub → Packages → `aws-ddns`
+  → Package settings. Pulling needs no authentication.
+
+  ```bash
+  make deploy                                        # publish <VERSION> + latest
+  # on the target:
+  docker pull ghcr.io/monier/aws-ddns:<VERSION>      # arch selected automatically
+  docker run --rm ghcr.io/monier/aws-ddns:<VERSION> -version
+  # then deploy dist/docker-compose.registry.yaml as a Compose project (edit the
+  # host data-folder line), or create the container from the pulled image in the UI.
+  ```
+
+- **Offline mode (`make export-image`) — registry-less fallback.** The image is built
+  on your machine and imported manually on the target; nothing leaves your network.
+  Steps 1–4 below describe this mode.
+
+The data-folder rules (step 2) and container settings (step 3) are identical in both
+modes — only where the image comes from differs.
+
+### 1. Build, pack, export — no registry (offline mode)
 
 ```bash
 make export-image
@@ -250,14 +276,19 @@ Two equivalent paths — use whichever your platform supports best:
   edit the one marked line — the host data-folder path. The template lives at
   `infra/server/docker-compose.yaml`.
 
-### Upgrading — recreate, never "update"/pull
+### Upgrading
 
-A registry-less deployment has nothing to pull from, so **a platform's
-"update container" / "pull latest" action can never work here** — it attempts a
-registry pull of `localhost/aws-ddns:<tag>` and fails (typically with
-`unsupported manifest media type`, `pull access denied`, or `manifest unknown`). The
-failure is harmless — the running container is untouched — but it is not the upgrade
-path. The upgrade path is:
+**Registry mode:** upgrades are pull-based and platform update actions work. With a
+pinned tag, publish the new version (`make deploy`), point the container/project at the
+new `ghcr.io/monier/aws-ddns:<version>` tag, redeploy. With `:latest`, the platform's
+"update container" button (or `docker compose pull`) fetches the new version directly.
+
+**Offline mode: recreate, never "update"/pull.** A registry-less deployment has nothing
+to pull from, so **a platform's "update container" / "pull latest" action can never
+work in this mode** — it attempts a registry pull of `localhost/aws-ddns:<tag>` and
+fails (typically with `unsupported manifest media type`, `pull access denied`, or
+`manifest unknown`). The failure is harmless — the running container is untouched — but
+it is not the upgrade path. The offline upgrade path is:
 
 1. Copy and `docker load` the new version's archive (as in step 1).
 2. **Recreate the container** pointing at the new `localhost/aws-ddns:<version>` tag:
@@ -357,6 +388,13 @@ No ports are published — the daemon makes outbound HTTPS calls only.
     container as a specific non-root user that cannot write the mounted host folder.
     Either grant that user write on the folder (host folder permissions), or pin the
     owner explicitly with a `user: "<uid>:<gid>"` line in the compose project.
+  - **"Update container" fails with `unsupported manifest media type`, `pull access
+    denied`, or `manifest unknown`** (offline mode only) → the platform tried to *pull*
+    `localhost/aws-ddns:<tag>` from a registry, and offline deployments have none (the
+    `localhost/` prefix may even resolve to an unrelated web server on the host, which
+    answers with HTML). Harmless — the running container is untouched. Upgrade by
+    **recreating** the container (Deployment → Upgrading), or switch to registry mode
+    (`make deploy`), where update actions work.
   - `unknown key "..."` → typo in `aws-ddns.ini`; keys use the exact names from the
     Settings table.
   - Sync failures → set `LOG_LEVEL=debug` (INI or env) and read the per-step entries to

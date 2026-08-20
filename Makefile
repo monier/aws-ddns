@@ -1,4 +1,4 @@
-.PHONY: init-env install build clean start update shutdown prune teardown urls test format lint check export-image
+.PHONY: init-env install build clean start update shutdown prune teardown urls test format lint check export-image deploy
 
 PROJECT := aws-ddns
 APPS    := aws-ddns
@@ -100,7 +100,7 @@ export-image:
 	  $(DOCKER) save $(IMAGE):$(VERSION) | gzip > $(DIST)/$$artifact; \
 	  ( cd $(DIST) && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$$artifact" > "$$artifact.sha256" || shasum -a 256 "$$artifact" > "$$artifact.sha256"; } ); \
 	done; \
-	sed 's/__VERSION__/$(VERSION)/' infra/server/docker-compose.yaml > $(DIST)/docker-compose.yaml; \
+	sed 's|__IMAGE__|$(IMAGE):$(VERSION)|' infra/server/docker-compose.yaml > $(DIST)/docker-compose.yaml; \
 	printf '\n%s\n' "Exported to $(DIST)/:"; \
 	ls -lh $(DIST)/aws-ddns-$(VERSION)-linux-*.tar.gz $(DIST)/aws-ddns-$(VERSION)-linux-*.sha256 $(DIST)/docker-compose.yaml | awk '{print "  " $$0}'; \
 	printf '\n%s\n  %s\n  %s\n  %s\n  %s\n%s\n  %s\n  %s\n\n' \
@@ -115,6 +115,46 @@ export-image:
 	@printf '%s\n  %s\n\n' \
 	  "Upgrading an existing deployment: load the new archive, then RECREATE the container with the new tag (delete + create, or compose re-deploy)." \
 	  "A platform's 'update'/pull action cannot work without a registry — it fails harmlessly; recreating is the upgrade path. Data survives in the host data folder."
+
+# ── Registry distribution (ghcr.io, public, multi-arch) ──────────────────────
+# `deploy` builds linux/amd64 + linux/arm64 and pushes ONE multi-arch manifest
+# to the public GitHub Container Registry under the version tag and :latest —
+# a target then pulls the right architecture automatically, and platform
+# "update"/pull actions work. Login (one-time per machine, needs a token with
+# the write:packages scope):
+#   gh auth refresh -h github.com -s write:packages   # once, if the scope is missing
+#   gh auth token | $(DOCKER) login ghcr.io --username <github-user> --password-stdin
+# First push creates the ghcr package PRIVATE — set it public once in
+# GitHub → Packages → aws-ddns → Package settings → Change visibility.
+
+REGISTRY_IMAGE ?= ghcr.io/monier/aws-ddns
+
+deploy:
+	@mkdir -p $(DIST)
+	@set -e; \
+	if $(DOCKER) --version 2>/dev/null | grep -qi podman; then \
+	  $(DOCKER) manifest rm $(REGISTRY_IMAGE):$(VERSION) >/dev/null 2>&1 || true; \
+	  $(DOCKER) manifest create $(REGISTRY_IMAGE):$(VERSION); \
+	  for arch in $(PLATFORM_ARCHS); do \
+	    echo "▶ building $(REGISTRY_IMAGE):$(VERSION) for linux/$$arch"; \
+	    $(DOCKER) build --platform linux/$$arch --build-arg VERSION=$(VERSION) --manifest $(REGISTRY_IMAGE):$(VERSION) apps/aws-ddns; \
+	  done; \
+	  echo "▶ pushing $(REGISTRY_IMAGE):$(VERSION) and :latest (amd64+arm64)"; \
+	  $(DOCKER) manifest push --all $(REGISTRY_IMAGE):$(VERSION) docker://$(REGISTRY_IMAGE):$(VERSION); \
+	  $(DOCKER) manifest push --all $(REGISTRY_IMAGE):$(VERSION) docker://$(REGISTRY_IMAGE):latest; \
+	else \
+	  echo "▶ buildx: building and pushing $(REGISTRY_IMAGE):$(VERSION) and :latest (amd64+arm64)"; \
+	  $(DOCKER) buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) \
+	    -t $(REGISTRY_IMAGE):$(VERSION) -t $(REGISTRY_IMAGE):latest --push apps/aws-ddns; \
+	fi
+	@sed 's|__IMAGE__|$(REGISTRY_IMAGE):$(VERSION)|' infra/server/docker-compose.yaml > $(DIST)/docker-compose.registry.yaml
+	@printf '\n%s\n%s\n  %s\n  %s\n  %s\n%s\n\n' \
+	  "Published $(REGISTRY_IMAGE):$(VERSION) (+ :latest), multi-arch." \
+	  "On the target (no archive copying needed):" \
+	  "docker pull $(REGISTRY_IMAGE):$(VERSION)   # correct architecture selected automatically" \
+	  "docker run --rm $(REGISTRY_IMAGE):$(VERSION) -version   # must print $(VERSION)" \
+	  "then deploy $(DIST)/docker-compose.registry.yaml as a Compose project (edit its host data-folder path)." \
+	  "Upgrades in registry mode: bump the tag and pull — platform 'update'/pull actions work (use :latest for button-driven upgrades)."
 
 # aws-ddns is a headless daemon: no inbound port, nothing browser-reachable.
 urls:

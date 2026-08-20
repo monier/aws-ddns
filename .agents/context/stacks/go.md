@@ -37,6 +37,8 @@ No other framework, library, or tool without explicit approval recorded in `AGEN
 - Container image: multi-stage Dockerfile — `golang` builder → `scratch` runtime with only
   the binary and CA certificates, no baked-in user (the engine manages it), no exposed
   ports.
-- Deployment images are built per architecture (`make image-amd64` in the app for
-  `linux/amd64`; the root `export-image` for every supported one); the builder stage
-  cross-compiles, so the build machine's architecture does not matter.
+- Deployment images are multi-architecture (`amd64` + `arm64`): the root `deploy` pushes
+  one multi-arch manifest to the public registry (`ghcr.io/monier/aws-ddns`, tags
+  `<VERSION>` and `latest`); the root `export-image` packs per-architecture offline
+  archives; `make image-amd64` in the app builds one arch without packing. The builder
+  stage cross-compiles, so the build machine's architecture does not matter.
