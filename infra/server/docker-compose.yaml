@@ -1,0 +1,36 @@
+# aws-ddns — deployment on a local server (as a Docker Compose project).
+#
+# TEMPLATE: `make export-image` writes the ready-to-use copy to
+# dist/docker-compose.yaml with __VERSION__ replaced by the released version —
+# deploy that copy, not this file.
+#
+# The rendered file is self-contained: no .env, no build context, no registry.
+# Before bringing it up, ONCE per version, load the image the file pins:
+#   docker load -i aws-ddns-<version>-linux-amd64.tar.gz     (x86_64 target)
+# The archive restores the image as localhost/aws-ddns:<version> — the exact
+# name referenced below; any other name would make Docker look on Docker Hub.
+#
+# Put your filled-in aws-ddns.ini in the host data folder mounted below; the
+# app writes its last-ip.txt state file next to it. No user id is set anywhere —
+# the container engine manages the user (Docker's default unless your platform
+# overrides it), so the folder needs no ownership preparation.
+#
+# UPGRADES: load the new version's archive, then RE-DEPLOY this project with the
+# newly rendered file (only the image tag changes). Never use a platform's
+# "update"/pull action — there is no registry to pull from; it fails harmlessly.
+
+services:
+  aws-ddns:
+    image: localhost/aws-ddns:__VERSION__
+    container_name: aws-ddns
+    restart: unless-stopped
+    # Headless daemon: no inbound port is ever published; outbound HTTPS only.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    network_mode: bridge
+    volumes:
+      # >>> EDIT the host path to your server data folder. <<<
+      - /srv/aws-ddns:/var/lib/aws-ddns

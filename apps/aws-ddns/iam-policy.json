@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowDdnsUpsertOfTheOneRecord",
+      "Effect": "Allow",
+      "Action": "route53:ChangeResourceRecordSets",
+      "Resource": "arn:aws:route53:::hostedzone/HOSTED_ZONE_ID",
+      "Condition": {
+        "ForAllValues:StringEquals": {
+          "route53:ChangeResourceRecordSetsNormalizedRecordNames": ["RECORD_NAME"],
+          "route53:ChangeResourceRecordSetsRecordTypes": ["A"],
+          "route53:ChangeResourceRecordSetsActions": ["UPSERT"]
+        }
+      }
+    },
+    {
+      "Sid": "AllowDdnsToReadTheZoneRecords",
+      "Effect": "Allow",
+      "Action": "route53:ListResourceRecordSets",
+      "Resource": "arn:aws:route53:::hostedzone/HOSTED_ZONE_ID"
+    }
+  ]
+}

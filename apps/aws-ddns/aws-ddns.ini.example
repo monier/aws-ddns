@@ -1,0 +1,22 @@
+; aws-ddns production configuration.
+; Copy to aws-ddns.ini (git-ignored — it holds credentials), fill in the
+; values, and place it in the app data folder (default /var/lib/aws-ddns;
+; configurable with -data-dir or the DATA_DIR environment variable — the
+; folder's own location can never be set in this file). The app also keeps
+; its last-known-IP state file in that folder, so it must be read/write.
+; Keys are the same names as the environment variables; environment variables
+; override file values. Section headers are cosmetic.
+
+[aws]
+AWS_ACCESS_KEY_ID = REPLACE_ME
+AWS_SECRET_ACCESS_KEY = REPLACE_ME
+AWS_REGION = us-east-1
+
+[record]
+HOSTED_ZONE_ID = REPLACE_ME
+RECORD_NAME = home.example.com
+TTL = 60
+
+[service]
+INTERVAL = 5m
+LOG_LEVEL = info

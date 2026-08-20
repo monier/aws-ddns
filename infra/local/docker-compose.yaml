@@ -1,0 +1,40 @@
+# Local development environment.
+# Runs the aws-ddns daemon as a container.
+# Uses root .env for all configuration — run `make init-env` first.
+# Usage: make start | make shutdown
+
+name: aws-ddns
+
+services:
+  aws-ddns:
+    build:
+      context: ../../apps/aws-ddns
+    # Do not use env_file — list all variables explicitly
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      HOSTED_ZONE_ID: ${HOSTED_ZONE_ID}
+      RECORD_NAME: ${RECORD_NAME}
+      AWS_REGION: ${AWS_REGION}
+      INTERVAL: ${INTERVAL}
+      TTL: ${TTL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      DATA_DIR: ${DATA_DIR}
+    # Headless daemon: no inbound port is ever published.
+    restart: unless-stopped
+    read_only: true
+    volumes:
+      # The app data folder (default /var/lib/aws-ddns): the app needs
+      # read/write here — it keeps its last-known-IP state file in it, and
+      # reads an optional aws-ddns.ini from it (see
+      # apps/aws-ddns/aws-ddns.ini.example). Production mounts a host folder
+      # holding the INI at this path and can drop the variables above.
+      # If DATA_DIR is overridden, adjust this mount target to match.
+      - data:/var/lib/aws-ddns
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  data:
