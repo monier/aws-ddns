@@ -22,9 +22,10 @@ graph TD
 
 Every `INTERVAL` (default 5 min): discover the public IPv4 over HTTPS (two endpoints,
 with fallback) → compare with the locally cached last IP → **only when it changed**,
-read the Route 53 record and `UPSERT` it. Failures are logged and retried next cycle;
-`SIGTERM` stops it gracefully. Go standard library + AWS SDK v2, structured JSON logs
-on stdout, `scratch`-based container image.
+read the Route 53 record and `UPSERT` it. The first cycle after a start always checks
+Route 53, whatever the cache holds — restarting forces a sync. Failures are logged and
+retried next cycle; `SIGTERM` stops it gracefully. Go standard library + AWS SDK v2,
+structured JSON logs on stdout, `scratch`-based container image.
 
 **No specific permission is needed anywhere:**
 
@@ -129,8 +130,9 @@ Full deployment, configuration, and operations reference:
 - **"Update container" fails with a manifest/pull error** → offline deployments have
   no registry to pull from: recreate the container with the new tag instead — or
   switch to the registry image, where updates work.
-- **Record changed externally but IP unchanged** → delete `<data-dir>/last-ip.txt` to
-  force a Route 53 comparison next cycle.
+- **Record changed externally but IP unchanged** → restart the container: the first
+  cycle after a start always checks Route 53 (deleting `<data-dir>/last-ip.txt` works
+  too).
 - **Wrong IP discovered when testing locally** → the machine is on a VPN or a
   different gateway than the server.
 - **Anything else** → set `LOG_LEVEL=debug`: every step logs to stdout with durations;

@@ -51,9 +51,10 @@ Makefile        # Root recipes (delegate to apps/aws-ddns)
   never embedded in code, the binary, or the Docker image, and never committed —
   `aws-ddns.ini` is git-ignored.
 - The last synchronized IP is cached in the state file, so Route 53 is queried only when
-  the discovered address changed (or the cache is empty/unreadable). The cache must never
-  be written on a failed upsert, and runtime state-file failures must degrade to querying
-  Route 53 — never crash the daemon.
+  the discovered address changed (or the cache is empty/unreadable). **The first cycle
+  after startup always queries Route 53, whatever the cache holds** — a restart forces a
+  reconciliation. The cache must never be written on a failed upsert, and runtime
+  state-file failures must degrade to querying Route 53 — never crash the daemon.
 - AWS access uses a dedicated IAM identity restricted by `apps/aws-ddns/iam-policy.json`:
   `UPSERT` of the one configured `A` record, plus zone-scoped read
   (`route53:ListResourceRecordSets`) needed to compare before writing. Nothing broader.

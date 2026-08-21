@@ -10,6 +10,10 @@ import (
 // SyncService owns the synchronization decision: discover the public IPv4,
 // compare it with the locally stored last-known address, and only when they
 // differ (or nothing is stored) consult Route 53 and upsert as needed.
+//
+// The first cycle after startup always consults Route 53, whatever the cache
+// holds — restarting the daemon is the way to force a reconciliation (e.g.
+// after the record was edited externally while the IP stayed the same).
 type SyncService struct {
 	discoverer IPDiscoverer
 	repository DNSRepository
@@ -17,6 +21,10 @@ type SyncService struct {
 	recordName string
 	ttl        int64
 	logger     *slog.Logger
+	// reconciled flips after the first successful sync; until then the cache
+	// short-circuit is disabled. Only the runner's single goroutine calls
+	// Sync, so no locking is needed.
+	reconciled bool
 }
 
 func NewSyncService(discoverer IPDiscoverer, repository DNSRepository, state StateStore, recordName string, ttl int64, logger *slog.Logger) *SyncService {
@@ -42,14 +50,18 @@ func (s *SyncService) Sync(ctx context.Context) error {
 	s.logger.Debug("public IPv4 discovered", "ip", ip, "duration", time.Since(discoverStart).String())
 
 	cached, ok := s.lastKnownIPv4()
-	if ok && cached == ip {
+	if !s.reconciled {
+		s.logger.Info("first synchronization since startup, checking Route 53 regardless of the cached IP", "record", s.recordName, "ip", ip)
+	} else if ok && cached == ip {
 		s.logger.Info("public IPv4 unchanged since last synchronization, skipping Route 53 check", "record", s.recordName, "ip", ip)
 		return nil
 	}
-	if ok {
-		s.logger.Debug("public IPv4 differs from last known, checking Route 53", "lastKnown", cached, "current", ip)
-	} else {
-		s.logger.Debug("no last known IP cached, checking Route 53")
+	if s.reconciled {
+		if ok {
+			s.logger.Debug("public IPv4 differs from last known, checking Route 53", "lastKnown", cached, "current", ip)
+		} else {
+			s.logger.Debug("no last known IP cached, checking Route 53")
+		}
 	}
 
 	s.logger.Debug("reading DNS record from Route 53", "record", s.recordName)
@@ -63,6 +75,7 @@ func (s *SyncService) Sync(ctx context.Context) error {
 	if exists && current == ip {
 		s.logger.Info("record already up to date", "record", s.recordName, "ip", ip)
 		s.rememberIPv4(ip)
+		s.reconciled = true
 		return nil
 	}
 
@@ -79,6 +92,7 @@ func (s *SyncService) Sync(ctx context.Context) error {
 	}
 	s.logger.Info("record synchronized", "record", s.recordName, "previous", previous, "current", ip, "ttl", s.ttl)
 	s.rememberIPv4(ip)
+	s.reconciled = true
 	return nil
 }
 

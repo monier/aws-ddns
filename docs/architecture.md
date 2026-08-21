@@ -37,7 +37,9 @@ Every cycle (at startup, then every `INTERVAL`):
 1. Discover the current public IPv4 over HTTPS — first endpoint that answers with a valid
    IPv4 wins; the others are fallbacks.
 2. Compare it with the locally cached last synchronized IP (`<data-dir>/last-ip.txt`). If they
-   match, the cycle ends — Route 53 is not queried.
+   match, the cycle ends — Route 53 is not queried. Exception: the first cycle after
+   startup always proceeds to Route 53 whatever the cache holds, so a restart forces a
+   full reconciliation.
 3. Otherwise read the configured `A` record from the hosted zone; if it is missing or holds
    a different address, `UPSERT` it with the configured `TTL`.
 4. Persist the address to the state file (only after a successful check/update — a failed

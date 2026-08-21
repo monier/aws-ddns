@@ -80,11 +80,13 @@ IP discovery endpoints are fixed, tried in order: `https://api.ipify.org`, then
 
 After every successful check or update, the current IP is written atomically (temp +
 rename) to `<data-dir>/last-ip.txt`. On the next cycle, a cache hit skips Route 53
-entirely. Invariants: a failed upsert is never cached (so it retries); a
-missing/corrupt/unwritable state file degrades to querying Route 53 with a warning —
-only the startup probe of the folder is fatal. Trade-off: a record edited externally
-while the IP is unchanged is not corrected until the IP changes (or `last-ip.txt` is
-deleted).
+entirely. Invariants: **the first cycle after startup always checks Route 53,
+whatever the cache holds** — the cache only short-circuits after the first successful
+sync, so restarting the daemon forces a reconciliation; a failed upsert is never
+cached (so it retries); a missing/corrupt/unwritable state file degrades to querying
+Route 53 with a warning — only the startup probe of the folder is fatal. A record
+edited externally while the IP is unchanged is therefore corrected on the next
+restart (or by deleting `last-ip.txt`, or when the IP next changes).
 
 ## AWS setup — least privilege
 

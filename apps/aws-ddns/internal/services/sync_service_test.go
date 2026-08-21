@@ -65,30 +65,59 @@ func newSyncService(discoverer IPDiscoverer, repository DNSRepository, state Sta
 	return NewSyncService(discoverer, repository, state, "ddns-test.example.com", 60, logger)
 }
 
-func TestSyncSkipsRoute53WhenCachedIPMatches(t *testing.T) {
-	repository := &fakeDNSRepository{}
+func TestSyncFirstCycleChecksRoute53EvenWhenCachedIPMatches(t *testing.T) {
+	// A restart must force a reconciliation, whatever last-ip.txt holds.
+	repository := &fakeDNSRepository{value: "203.0.113.7", exists: true}
 	state := &fakeStateStore{value: "203.0.113.7", ok: true}
 	service := newSyncService(&fakeDiscoverer{ip: "203.0.113.7"}, repository, state)
 
 	err := service.Sync(context.Background())
 
 	require.NoError(t, err)
-	assert.Zero(t, repository.reads)
+	assert.Equal(t, 1, repository.reads)
 	assert.Zero(t, repository.upserts)
 }
 
-func TestSyncChecksRoute53WhenCachedIPDiffers(t *testing.T) {
-	repository := &fakeDNSRepository{value: "192.0.2.1", exists: true}
-	state := &fakeStateStore{value: "192.0.2.1", ok: true}
+func TestSyncSkipsRoute53OnCacheHitOnlyAfterAFirstSuccessfulSync(t *testing.T) {
+	repository := &fakeDNSRepository{value: "203.0.113.7", exists: true}
+	state := &fakeStateStore{value: "203.0.113.7", ok: true}
 	service := newSyncService(&fakeDiscoverer{ip: "203.0.113.7"}, repository, state)
 
+	require.NoError(t, service.Sync(context.Background())) // first cycle: forced check
+	require.NoError(t, service.Sync(context.Background())) // second cycle: cache hit
+
+	assert.Equal(t, 1, repository.reads)
+	assert.Zero(t, repository.upserts)
+}
+
+func TestSyncKeepsForcingRoute53UntilTheFirstSyncSucceeds(t *testing.T) {
+	repository := &fakeDNSRepository{readErr: errors.New("access denied")}
+	state := &fakeStateStore{value: "203.0.113.7", ok: true}
+	service := newSyncService(&fakeDiscoverer{ip: "203.0.113.7"}, repository, state)
+
+	require.Error(t, service.Sync(context.Background())) // first attempt fails
+	repository.readErr = nil
+	repository.value, repository.exists = "203.0.113.7", true
+	require.NoError(t, service.Sync(context.Background())) // retry still checks Route 53
+
+	assert.Equal(t, 2, repository.reads)
+}
+
+func TestSyncChecksRoute53WhenCachedIPDiffers(t *testing.T) {
+	discoverer := &fakeDiscoverer{ip: "192.0.2.1"}
+	repository := &fakeDNSRepository{value: "192.0.2.1", exists: true}
+	state := &fakeStateStore{value: "192.0.2.1", ok: true}
+	service := newSyncService(discoverer, repository, state)
+	require.NoError(t, service.Sync(context.Background())) // pass the startup force
+
+	discoverer.ip = "203.0.113.7" // the public IP changes
 	err := service.Sync(context.Background())
 
 	require.NoError(t, err)
-	assert.Equal(t, 1, repository.reads)
+	assert.Equal(t, 2, repository.reads)
 	assert.Equal(t, 1, repository.upserts)
 	assert.Equal(t, "203.0.113.7", repository.upsertedIP)
-	assert.Equal(t, []string{"203.0.113.7"}, state.saved)
+	assert.Equal(t, []string{"192.0.2.1", "203.0.113.7"}, state.saved)
 }
 
 func TestSyncChecksRoute53WhenNothingIsCached(t *testing.T) {

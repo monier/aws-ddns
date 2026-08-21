@@ -29,8 +29,10 @@ through the Route 53 API, and issues an `UPSERT` only when the value changed. It
   (`internal/framework/config_file.go`) — do not introduce an INI library. `DATA_DIR` is
   rejected as an INI key by design.
 - **The last-known-IP cache is best-effort.** `SyncService` skips Route 53 only on a cache
-  hit; it never caches a failed upsert, and any state-file error degrades to the uncached
-  path with a warning. Keep those invariants — they are what makes the cache safe.
+  hit **after the first successful sync of the process** — the first cycle always checks
+  Route 53 whatever the cache holds (restart = forced reconciliation); it never caches a
+  failed upsert, and any state-file error degrades to the uncached path with a warning.
+  Keep those invariants — they are what makes the cache safe.
 - **Approved dependencies:** AWS SDK for Go v2 (Apache-2.0), `stretchr/testify` (MIT,
   tests only). Everything else is standard library.
 - **IAM:** the dedicated identity uses `iam-policy.json` — conditioned `UPSERT` on the one
