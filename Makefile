@@ -116,18 +116,18 @@ export-image:
 	  "Upgrading an existing deployment: load the new archive, then RECREATE the container with the new tag (delete + create, or compose re-deploy)." \
 	  "A platform's 'update'/pull action cannot work without a registry — it fails harmlessly; recreating is the upgrade path. Data survives in the host data folder."
 
-# ── Registry distribution (ghcr.io, public, multi-arch) ──────────────────────
+# ── Registry distribution (Docker Hub, public, multi-arch) ───────────────────
 # `deploy` builds linux/amd64 + linux/arm64 and pushes ONE multi-arch manifest
-# to the public GitHub Container Registry under the version tag and :latest —
-# a target then pulls the right architecture automatically, and platform
-# "update"/pull actions work. Login (one-time per machine, needs a token with
-# the write:packages scope):
-#   gh auth refresh -h github.com -s write:packages   # once, if the scope is missing
-#   gh auth token | $(DOCKER) login ghcr.io --username <github-user> --password-stdin
-# First push creates the ghcr package PRIVATE — set it public once in
-# GitHub → Packages → aws-ddns → Package settings → Change visibility.
+# to Docker Hub under the version tag and :latest — a target then pulls the
+# right architecture automatically, platform "update"/pull actions work, and
+# container UIs find the image in their native search. Login (one-time per
+# machine, password = a Docker Hub access token, Read & Write scope):
+#   $(DOCKER) login docker.io -u <docker-id>
+# Docker Hub creates the repository PUBLIC by default on first push.
+# Any other OCI registry works via an override:
+#   make deploy REGISTRY_IMAGE=ghcr.io/<github-user>/aws-ddns
 
-REGISTRY_IMAGE ?= ghcr.io/monier/aws-ddns
+REGISTRY_IMAGE ?= docker.io/mitchmo/aws-ddns
 
 deploy:
 	@mkdir -p $(DIST)

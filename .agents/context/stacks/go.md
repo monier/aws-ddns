@@ -38,7 +38,7 @@ No other framework, library, or tool without explicit approval recorded in `AGEN
   the binary and CA certificates, no baked-in user (the engine manages it), no exposed
   ports.
 - Deployment images are multi-architecture (`amd64` + `arm64`): the root `deploy` pushes
-  one multi-arch manifest to the public registry (`ghcr.io/monier/aws-ddns`, tags
+  one multi-arch manifest to the public registry (`docker.io/mitchmo/aws-ddns`, tags
   `<VERSION>` and `latest`); the root `export-image` packs per-architecture offline
   archives; `make image-amd64` in the app builds one arch without packing. The builder
   stage cross-compiles, so the build machine's architecture does not matter.

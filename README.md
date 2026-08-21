@@ -97,11 +97,11 @@ make start      # run the daemon as a container (Compose); make shutdown to stop
 ### Use the public registry image
 
 ```bash
-docker pull ghcr.io/monier/aws-ddns:latest        # multi-arch: amd64 + arm64
+docker pull docker.io/mitchmo/aws-ddns:latest        # multi-arch: amd64 + arm64
 docker run -d --name aws-ddns --restart unless-stopped \
   --read-only --cap-drop ALL \
   -v /srv/aws-ddns:/var/lib/aws-ddns \
-  ghcr.io/monier/aws-ddns:latest
+  docker.io/mitchmo/aws-ddns:latest
 ```
 
 Put your `aws-ddns.ini` in the mounted folder first. Upgrades are pull-based —

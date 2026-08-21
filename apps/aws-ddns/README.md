@@ -130,17 +130,22 @@ identical in both — only the image source differs.
 
 ### Registry mode (`make deploy`) — default for connected servers
 
-Builds both architectures and pushes **one multi-arch manifest** to
-`ghcr.io/monier/aws-ddns` (tags `<VERSION>` and `latest`), then renders
+Builds both architectures and pushes **one multi-arch manifest** to Docker Hub as
+`docker.io/mitchmo/aws-ddns` (tags `<VERSION>` and `latest`), then renders
 `dist/docker-compose.registry.yaml`. Targets pull the right architecture
-automatically; pulling needs no authentication (public package).
+automatically; pulling needs no authentication (public repository), and container UIs
+find the image in their **native search** (`mitchmo/aws-ddns`) — no registry-source
+configuration.
 
-Publisher one-time setup: a token with the `write:packages` scope —
-`gh auth refresh -h github.com -s write:packages`, then
-`gh auth token | docker login ghcr.io --username <github-user> --password-stdin`.
-After a scope refresh, **log in again** (the engine caches the old token). The first
-push creates the package private — set it public once in GitHub → Packages →
-`aws-ddns` → Package settings.
+Publisher one-time setup: a Docker Hub access token (hub.docker.com → Account
+settings → Personal access tokens, Read & Write), then
+`podman login docker.io -u <docker-id>` (or `docker login`) with the token as
+password. Docker Hub creates the repository **public by default** on first push. After
+rotating a token, **log in again** — the engine caches the old credential.
+
+Any other OCI registry works via an override, e.g.
+`make deploy REGISTRY_IMAGE=ghcr.io/<github-user>/aws-ddns` (note: registries other
+than Docker Hub don't appear in container UIs' search — pull by full reference there).
 
 Upgrades: pull-based. With `:latest`, platform "update container" actions work; with a
 pinned tag, publish, bump the tag, redeploy.
